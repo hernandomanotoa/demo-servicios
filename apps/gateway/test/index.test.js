@@ -2,15 +2,22 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
 const WebSocket = require('ws');
-const { app, startServer } = require('../index.js');
+const { app, startServer, startService, stopService } = require('../index.js');
 
 let server;
 let baseUrl;
-let wsUrl;
 
-function request(path) {
+function request(path, method = 'GET', body = null) {
   return new Promise((resolve, reject) => {
-    http.get(`${baseUrl}${path}`, (res) => {
+    const url = new URL(`${baseUrl}${path}`);
+    const options = {
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname + url.search,
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+    };
+    const req = http.request(options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
@@ -20,7 +27,10 @@ function request(path) {
           resolve({ status: res.statusCode, body: data });
         }
       });
-    }).on('error', reject);
+    });
+    req.on('error', reject);
+    if (body) req.write(JSON.stringify(body));
+    req.end();
   });
 }
 
@@ -30,7 +40,6 @@ describe('gateway', () => {
       server = app.listen(0, '127.0.0.1', () => {
         const addr = server.address();
         baseUrl = `http://127.0.0.1:${addr.port}`;
-        wsUrl = `ws://127.0.0.1:${addr.port}/ws`;
         resolve();
       });
     });
@@ -55,7 +64,6 @@ describe('gateway', () => {
   });
 
   it('WebSocket /ws recibe mensaje JSON', async () => {
-    // Usamos startServer(0) para puerto efímero y esperamos evento 'listening'
     const wsServer = startServer(0);
     const testWsUrl = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('listen timeout')), 3000);
@@ -88,5 +96,24 @@ describe('gateway', () => {
     assert.strictEqual(msg.services.length, 8);
     assert.ok(msg.updatedAt);
     await new Promise((resolve) => wsServer.close(resolve));
+  });
+
+  it('POST /api/services/:name/start devuelve estructura correcta', async () => {
+    // Intentamos iniciar un servicio; puede fallar si ya corre, pero la estructura debe ser válida
+    const res = await request('/api/services/API%20Node/start', 'POST');
+    assert.ok(typeof res.body.success === 'boolean');
+    assert.ok(res.body.name || res.body.error);
+  });
+
+  it('POST /api/services/:name/stop devuelve estructura correcta', async () => {
+    const res = await request('/api/services/API%20Node/stop', 'POST');
+    assert.ok(typeof res.body.success === 'boolean');
+    assert.ok(res.body.name || res.body.error);
+  });
+
+  it('POST /api/services/:name/restart devuelve estructura correcta', async () => {
+    const res = await request('/api/services/API%20Node/restart', 'POST');
+    assert.ok(typeof res.body.success === 'boolean');
+    assert.ok(res.body.name || res.body.error);
   });
 });

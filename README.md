@@ -81,6 +81,38 @@ curl http://localhost:3005              # Servicio Genérico
 
 ---
 
+## 🎛️ Control de procesos desde el dashboard
+
+El **Gateway** (`localhost:3002`) permite **iniciar, detener y reiniciar** cada servicio directamente desde el navegador.
+
+### Endpoints REST
+
+```bash
+curl -X POST http://localhost:3002/api/services/API%20Node/start
+curl -X POST http://localhost:3002/api/services/API%20Node/stop
+curl -X POST http://localhost:3002/api/services/API%20Node/restart
+```
+
+Respuesta:
+```json
+{ "success": true, "name": "API Node", "pid": 1234, "state": "up" }
+```
+
+### Estados visuales
+
+| Estado | Color | Acciones disponibles |
+|--------|-------|----------------------|
+| `up` | 🟢 Verde | Detener, Reiniciar |
+| `down` | 🔴 Rojo | Iniciar |
+
+### Cómo funciona el control
+
+- **Start**: el gateway ejecuta `spawn(command, args, { cwd })` y registra el PID.
+- **Stop**: primero intenta matar el proceso que el gateway inició; si no lo encuentra, busca el PID por directorio de trabajo (`/proc/[pid]/cwd`) como fallback cuando `lsof`/`fuser` no están disponibles.
+- **Restart**: stop + start con 1s de pausa entre ambos.
+
+---
+
 ## 🔌 WebSocket en tiempo real
 
 El **Gateway** (`localhost:3002`) expone un endpoint WebSocket en:
@@ -89,7 +121,7 @@ El **Gateway** (`localhost:3002`) expone un endpoint WebSocket en:
 ws://localhost:3002/ws
 ```
 
-Cada 3 segundos el servidor consulta el estado de los 8 servicios y empuja la actualización a todos los clientes conectados. La página HTML se actualiza sola sin refrescar.
+Cada 3 segundos el servidor consulta el estado de los 8 servicios y empuja la actualización a todos los clientes conectados. La página HTML se actualiza sola sin refrescar. Después de un `start` o `stop`, el servidor envía una actualización inmediata.
 
 ---
 

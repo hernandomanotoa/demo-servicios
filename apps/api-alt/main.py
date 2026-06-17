@@ -49,6 +49,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("0.0.0.0", PORT), APIHandler) as httpd:
         print(f"API Alternativa escuchando en http://0.0.0.0:{PORT} (accesible desde host en puerto 3003)")
         httpd.serve_forever()

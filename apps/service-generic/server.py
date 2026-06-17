@@ -35,6 +35,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("0.0.0.0", PORT), Handler) as httpd:
         print(f"Servicio genérico escuchando en http://0.0.0.0:{PORT}")
         httpd.serve_forever()
