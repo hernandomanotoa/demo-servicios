@@ -116,15 +116,23 @@ function getCwd(pid) {
 }
 
 /**
- * Busca el PID de un servicio por su directorio de trabajo y comando.
+ * Busca el PID de un servicio por su directorio de trabajo.
  * Útil cuando lsof/fuser no están disponibles.
- * Ignora snapshots de bash de Claude para no matar el wrapper equivocado.
+ * Ignora wrappers de bash de Claude para no matar el wrapper equivocado.
  */
 function findServicePidByCwd(svc) {
   const fs = require('fs');
   const path = require('path');
   const expectedCwd = path.resolve(__dirname, svc.cwd || '.');
-  const expectedCmd = svc.command ? svc.command[svc.command.length - 1] : '';
+
+  // Ejecutable real a buscar: python3, node, npm, etc.
+  const executables = new Set(
+    (svc.command || []).map(c => c.toLowerCase()).filter(c =>
+      c === 'python3' || c === 'python' || c === 'node' || c === 'npm' || c === 'next'
+    )
+  );
+  // Para npm, el proceso real suele ser node
+  if (executables.has('npm')) executables.add('node');
 
   let bestPid = null;
   try {
@@ -135,16 +143,23 @@ function findServicePidByCwd(svc) {
       const cwd = getCwd(pid);
       if (cwd !== expectedCwd) continue;
       const cmdline = getCmdline(pid);
-      if (!expectedCmd || !cmdline.includes(expectedCmd)) continue;
 
       // Ignorar wrappers de snapshot de bash
       if (cmdline.includes('/root/.claude/shell-snapshots')) continue;
 
       // Preferir proceso real (no /bin/bash wrapper)
-      if (!cmdline.startsWith('/bin/bash') && !cmdline.startsWith('bash')) {
+      if (cmdline.startsWith('/bin/bash') || cmdline.startsWith('bash')) {
+        if (!bestPid) bestPid = pid;
+        continue;
+      }
+
+      // Si coincide con algún ejecutable esperado, perfecto
+      const lower = cmdline.toLowerCase();
+      const matchesExe = Array.from(executables).some(exe => lower.includes(exe));
+      if (matchesExe || executables.size === 0) {
         return pid;
       }
-      if (!bestPid) bestPid = pid; // fallback si todo es bash
+      if (!bestPid) bestPid = pid;
     }
   } catch {
     // ignorar
@@ -191,10 +206,6 @@ function startService(name) {
         return resolve({ success: false, error: 'Servicio ya está corriendo' });
       }
     }
-    const existingPid = findPidByPort(svc.port);
-    if (existingPid) {
-      return resolve({ success: false, error: `Puerto ${svc.port} ya está ocupado (PID ${existingPid})` });
-    }
 
     const cwd = svc.cwd ? require('path').resolve(__dirname, svc.cwd) : __dirname;
     const env = { ...process.env, ...svc.env };
@@ -213,19 +224,56 @@ function startService(name) {
       resolve({ success: false, error: err.message });
     });
 
-    child.on('exit', () => {
+    child.on('exit', (code) => {
       spawnedProcesses.delete(name);
+      // Si aún no resolvimos, reportar fallo
+      if (!resolved) {
+        resolved = true;
+        resolve({ success: false, error: `El proceso terminó con código ${code}` });
+      }
     });
 
-    // Dar tiempo al proceso de iniciar
-    setTimeout(() => {
-      if (child.pid && !child.killed) {
-        resolve({ success: true, name, pid: child.pid, state: 'up' });
-      } else {
-        spawnedProcesses.delete(name);
-        resolve({ success: false, error: 'El proceso terminó inmediatamente' });
+    let resolved = false;
+    const maxWait = 12000; // 12 segundos máximo para servicios pesados (Next.js/Vite)
+    const interval = 600;  // chequear cada 600ms
+    let elapsed = 0;
+
+    const timer = setInterval(async () => {
+      elapsed += interval;
+
+      // Si el proceso murió, salir
+      if (child.killed || child.exitCode !== null) {
+        clearInterval(timer);
+        if (!resolved) {
+          resolved = true;
+          resolve({ success: false, error: 'El proceso terminó antes de estar listo' });
+        }
+        return;
       }
-    }, 1500);
+
+      // Intentar health check
+      const health = await checkService(svc);
+      if (health.status === 'up') {
+        clearInterval(timer);
+        if (!resolved) {
+          resolved = true;
+          resolve({ success: true, name, pid: child.pid, state: 'up' });
+        }
+        return;
+      }
+
+      // Timeout
+      if (elapsed >= maxWait) {
+        clearInterval(timer);
+        if (!resolved) {
+          resolved = true;
+          // Matar el proceso si nunca respondió
+          try { child.kill('SIGKILL'); } catch {}
+          spawnedProcesses.delete(name);
+          resolve({ success: false, error: 'Timeout: el servicio no respondió en 12s' });
+        }
+      }
+    }, interval);
   });
 }
 
