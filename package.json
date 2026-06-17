@@ -1,0 +1,23 @@
+{
+  "name": "sipe-multi-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:next": "cd apps/web-next && npm run dev",
+    "dev:vite": "cd apps/web-vite && npm run dev",
+    "preview:vite": "cd apps/web-vite && npm run preview",
+    "dev:api-python": "cd apps/api-python && python3 main.py",
+    "dev:api-node": "cd apps/api-node && npm run dev",
+    "dev:api-alt": "cd apps/api-alt && python3 main.py",
+    "dev:service-generic": "cd apps/service-generic && python3 server.py",
+    "dev:gateway": "cd apps/gateway && npm run dev",
+    "start:all": "concurrently \"npm run dev:api-python\" \"npm run dev:api-node\" \"npm run dev:api-alt\" \"npm run dev:service-generic\" \"npm run dev:gateway\" \"npm run dev:next\" \"npm run dev:vite\"",
+    "test": "npm run test:node && npm run test:python",
+    "test:node": "cd apps/api-node && npm test && cd ../gateway && npm test",
+    "test:python": "cd apps/api-python && python3 test_main.py && cd ../api-alt && python3 test_main.py && cd ../service-generic && python3 test_server.py",
+    "test:ports": "bash scripts/test-ports.sh"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
