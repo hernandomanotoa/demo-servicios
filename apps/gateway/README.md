@@ -6,7 +6,7 @@ Gateway central que expone un dashboard HTML con actualización en tiempo real v
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/` | Dashboard HTML con tarjetas de estado |
+| GET | `/` | Dashboard HTML con tarjetas de estado + **links directos** a cada servicio |
 | GET | `/api/status` | JSON con estado de todos los servicios |
 | GET | `/health` | `{ "healthy": true }` |
 | WS | `/ws` | WebSocket — broadcast de estado cada 3s |

@@ -93,6 +93,21 @@ app.get('/', async (req, res) => {
     .status { margin-top: 12px; font-weight: 600; font-size: 0.9rem; }
     .status.up { color: #4ade80; }
     .status.down { color: #f87171; }
+    .link {
+      display: inline-block;
+      margin-top: 10px;
+      color: #60a5fa;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    .link:hover { text-decoration: underline; }
+    .link svg {
+      width: 12px;
+      height: 12px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
     .footer { text-align: center; margin-top: 50px; color: #64748b; font-size: 0.85rem; }
     .timestamp { text-align: center; margin-top: 10px; color: #94a3b8; font-size: 0.8rem; }
     .connection-status {
@@ -126,7 +141,9 @@ app.get('/', async (req, res) => {
     const conn = document.getElementById('conn');
 
     function render(services) {
-      grid.innerHTML = services.map(s => \`
+      grid.innerHTML = services.map(s => {
+        const link = 'http://localhost:' + s.hostPort;
+        return \`
         <div class="card \${s.status}">
           <span class="badge \${s.type}">\${s.type}</span>
           <h3>\${s.name}</h3>
@@ -136,8 +153,11 @@ app.get('/', async (req, res) => {
             \${s.status === 'up' ? '● Online' : '○ Offline'}
             \${s.code ? '(' + s.code + ')' : ''}
           </div>
+          <a class="link" href="\${link}" target="_blank" rel="noopener">
+            Abrir en localhost:\${s.hostPort} ↗
+          </a>
         </div>
-      \`).join('');
+      \`}).join('');
     }
 
     function updateConn(connected) {
